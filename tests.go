@@ -7,7 +7,9 @@ import (
 
 func main() {
 	fmt.Println("Compiled fine")
-	svmlight.ParseSVMFile("data/boxes.train")
+	trainSet := svmlight.ParseSVMFile("data/boxes.train")
 	modelFile := svmlight.Learn("data/boxes.train", "data/boxes.model", 0., 0.5, 0)
+	classificationFile := svmlight.Classify("data/boxes.train", "data/boxes.model", "data/boxes.classification")
 	fmt.Println(modelFile.ToString())
+	fmt.Println(classificationFile.Accuracy(trainSet))
 }

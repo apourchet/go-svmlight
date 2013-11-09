@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"math"
 	"os"
 	"os/exec"
 	"strconv"
@@ -146,8 +147,6 @@ func Learn(trainFile, modelFile string, c float64, j float64, d int) *ModelFile 
 	if j == 0. {
 		j = 1.
 	}
-	// out, _ := exec.Command("svm_learn", "-c", fmt.Sprintf("%f", c), "-v", "1", trainFile, modelFile).Output()
-
 	exec.Command("svm_learn",
 		"-c", fmt.Sprintf("%f", c),
 		"-j", fmt.Sprintf("%f", j),
@@ -250,6 +249,28 @@ func ParseClassificationFile(fileName string) *ClassificationFile {
 	}
 
 	return &file
+}
+
+func (file *ClassificationFile) Accuracy(set *SVMFile) float64 {
+	totalInstances := float64(len(set.Instances))
+	correctPreds := 0.
+	if len(file.Results) <= len(set.Instances) {
+		for i, res := range file.Results {
+			lbl, _ := strconv.Atoi(set.Instances[i].Label)
+			if math.Signbit(float64(res)) == math.Signbit(float64(lbl)) {
+				correctPreds++
+			}
+		}
+	} else {
+		for i, instance := range set.Instances {
+			lbl, _ := strconv.Atoi(instance.Label)
+			if math.Signbit(float64(file.Results[i])) == math.Signbit(float64(lbl)) {
+				correctPreds++
+			}
+		}
+	}
+
+	return correctPreds / totalInstances
 }
 
 func (k *KernelInfo) ToString() string {
