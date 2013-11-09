@@ -22,7 +22,7 @@ type SVMInstance struct {
 type SVMFeature float64
 
 type KernelInfo struct {
-	t, d, g, s, r, u int
+	T, D, G, S, R, U int
 }
 
 type Alpha struct {
@@ -93,7 +93,6 @@ func ParseSVMFile(fileName string) *SVMFile {
 	file.Instances = []SVMInstance{}
 
 	for buffer, _, err := reader.ReadLine(); err == nil; buffer, _, err = reader.ReadLine() {
-		fmt.Println(string(buffer))
 		newInstance := SVMInstance{}
 		lbl_feat_split := strings.Split(string(buffer), " ")
 		if len(lbl_feat_split) <= 1 {
@@ -136,7 +135,7 @@ func (file *SVMFile) WriteSVMFile(fileName string) {
 	sysfile.Write(output.Bytes())
 }
 
-func Learn(trainFile, modelFile string, c float64, j float64, d int) string {
+func Learn(trainFile, modelFile string, c float64, j float64, d int) *ModelFile {
 	t := 0
 	if d != 0 {
 		t = 1
@@ -149,19 +148,19 @@ func Learn(trainFile, modelFile string, c float64, j float64, d int) string {
 	}
 	// out, _ := exec.Command("svm_learn", "-c", fmt.Sprintf("%f", c), "-v", "1", trainFile, modelFile).Output()
 
-	out, _ := exec.Command("svm_learn",
+	exec.Command("svm_learn",
 		"-c", fmt.Sprintf("%f", c),
 		"-j", fmt.Sprintf("%f", j),
 		"-t", fmt.Sprintf("%d", t),
 		"-d", fmt.Sprintf("%d", d),
 		trainFile, modelFile).Output()
 
-	return fmt.Sprintf("%s\n", out)
+	return ParseModelFile(modelFile)
 }
 
-func Classify(testFileName, modelFileName, resultFileName string) string {
-	out2, _ := exec.Command("svm_classify", "-v", "3", testFileName, modelFileName, resultFileName).Output()
-	return fmt.Sprintf("%s\n", out2)
+func Classify(testFileName, modelFileName, resultFileName string) *ClassificationFile {
+	exec.Command("svm_classify", "-v", "3", testFileName, modelFileName, resultFileName).Output()
+	return ParseClassificationFile(resultFileName)
 }
 
 func ParseModelFile(fileName string) *ModelFile {
@@ -185,17 +184,17 @@ func ParseModelFile(fileName string) *ModelFile {
 		case 0:
 			break
 		case 1:
-			modelFile.Kernel.t, _ = strconv.Atoi(str)
+			modelFile.Kernel.T, _ = strconv.Atoi(str)
 		case 2:
-			modelFile.Kernel.d, _ = strconv.Atoi(str)
+			modelFile.Kernel.D, _ = strconv.Atoi(str)
 		case 3:
-			modelFile.Kernel.g, _ = strconv.Atoi(str)
+			modelFile.Kernel.G, _ = strconv.Atoi(str)
 		case 4:
-			modelFile.Kernel.s, _ = strconv.Atoi(str)
+			modelFile.Kernel.S, _ = strconv.Atoi(str)
 		case 5:
-			modelFile.Kernel.r, _ = strconv.Atoi(str)
+			modelFile.Kernel.R, _ = strconv.Atoi(str)
 		case 6:
-			modelFile.Kernel.u, _ = strconv.Atoi(str)
+			modelFile.Kernel.U, _ = strconv.Atoi(str)
 		case 7:
 			break
 		case 8:
@@ -206,6 +205,7 @@ func ParseModelFile(fileName string) *ModelFile {
 			modelFile.Bias, _ = strconv.ParseFloat(str, 64)
 		default:
 			alpha := Alpha{}
+			alpha.Vector = make(map[int]SVMFeature)
 			lbl_feat_split := strings.Split(str, " ")
 			if len(lbl_feat_split) <= 1 {
 				panic("This file does not follow the conventional SVMlight format")
@@ -223,12 +223,12 @@ func ParseModelFile(fileName string) *ModelFile {
 			}
 			modelFile.Alphas = append(modelFile.Alphas, alpha)
 		}
-
+		lineNumber++
 	}
 	return &modelFile
 }
 
-func ParseResultFile(fileName string) *ClassificationFile {
+func ParseClassificationFile(fileName string) *ClassificationFile {
 	file := ClassificationFile{}
 	file.Results = []ClassificationResult{}
 
@@ -252,6 +252,73 @@ func ParseResultFile(fileName string) *ClassificationFile {
 	return &file
 }
 
-func (f *ClassificationFile) WriteResultFile(fileName string) {
+func (k *KernelInfo) ToString() string {
+	nu := "empty"
+	if k.U != -1 {
+		nu = fmt.Sprintf("%d ", k.U)
+	}
+	return fmt.Sprintf("%d #\n%d #\n%d #\n%d #\n%d #\n%s#\n", k.T, k.D, k.G, k.S, k.R, nu)
+}
 
+func (alpha *Alpha) ToString() string {
+	output := bytes.NewBufferString(fmt.Sprintf("%f ", alpha.Weight))
+	for featureId, featureValue := range alpha.Vector {
+		output.WriteString(fmt.Sprintf("%d:%f ", featureId, featureValue))
+	}
+	return output.String()
+}
+
+func (file *ModelFile) ToString() string {
+	output := bytes.NewBufferString("SVM-light Version V6.02\n" + file.Kernel.ToString())
+	maxIndex := 0
+	for _, alpha := range file.Alphas {
+		for key, _ := range alpha.Vector {
+			if key > maxIndex {
+				maxIndex = key
+			}
+		}
+	}
+	output.WriteString(fmt.Sprintf("%d #\n", maxIndex))
+	output.WriteString(fmt.Sprintf("%d #\n", file.TrainingSize))
+	output.WriteString(fmt.Sprintf("%d #\n", len(file.Alphas)+1))
+	output.WriteString(fmt.Sprintf("%f #\n", file.Bias))
+	for _, alpha := range file.Alphas {
+		output.WriteString(alpha.ToString() + "#\n")
+	}
+	return output.String()
+}
+
+func (res *ClassificationResult) ToString() string {
+	return fmt.Sprintf("%f\n", res)
+}
+
+func (file *ClassificationFile) ToString() string {
+	output := bytes.NewBufferString("")
+	for _, val := range file.Results {
+		output.WriteString(val.ToString())
+	}
+	return output.String()
+}
+
+func (f *ModelFile) WriteModelFile(fileName string) {
+	output := bytes.NewBufferString(f.ToString())
+
+	sysfile, _ := os.Create(fileName)
+	defer func() {
+		if err := sysfile.Close(); err != nil {
+			panic(err)
+		}
+	}()
+	sysfile.Write(output.Bytes())
+}
+
+func (f *ClassificationFile) WriteClassificationFile(fileName string) {
+	output := bytes.NewBufferString(f.ToString())
+	sysfile, _ := os.Create(fileName)
+	defer func() {
+		if err := sysfile.Close(); err != nil {
+			panic(err)
+		}
+	}()
+	sysfile.Write(output.Bytes())
 }
