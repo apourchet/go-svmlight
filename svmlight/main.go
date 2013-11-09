@@ -1,10 +1,11 @@
-package main
+package svmlight
 
 import (
 	"bufio"
-	"exec"
+	"bytes"
 	"fmt"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 )
@@ -24,7 +25,7 @@ type KernelInfo struct {
 	t, d, g, s, r, u int
 }
 
-type Aplha struct {
+type Alpha struct {
 	Weight float64
 	Vector map[int]SVMFeature
 }
@@ -33,8 +34,9 @@ type ModelFile struct {
 	Kernel       KernelInfo
 	TrainingSize int
 	Bias         float64
-	Alphas       []Aplha
+	Alphas       []Alpha
 }
+
 type ClassificationResult float64
 
 type ClassificationFile struct {
@@ -61,7 +63,7 @@ func (f *SVMFile) MakeBinary(label string) {
 	}
 }
 
-func (f *SVMFile) WriteBinary(label, fileName string) {
+func (file *SVMFile) WriteBinary(label, fileName string) {
 	newF := &SVMFile{}
 	for _, instance := range file.Instances {
 		newInstance := instance
@@ -72,7 +74,7 @@ func (f *SVMFile) WriteBinary(label, fileName string) {
 		}
 		newF.Instances = append(newF.Instances, newInstance)
 	}
-	newF.OutputFile(fileName)
+	newF.WriteSVMFile(fileName)
 }
 
 func ParseSVMFile(fileName string) *SVMFile {
@@ -86,11 +88,11 @@ func ParseSVMFile(fileName string) *SVMFile {
 		}
 	}()
 	reader := bufio.NewReader(fi)
-	file := SVMFile
+	file := SVMFile{}
 	file.FileName = fileName
 	file.Instances = []SVMInstance{}
 
-	for buffer, err := reader.ReadBytes("\n"); len(buffer) != 0; {
+	for buffer, _ := reader.ReadBytes('\n'); len(buffer) != 0; {
 		newInstance := SVMInstance{}
 		lbl_feat_split := strings.Split(string(buffer), " ")
 		if len(lbl_feat_split) <= 1 {
@@ -105,14 +107,14 @@ func ParseSVMFile(fileName string) *SVMFile {
 			}
 			key, _ := strconv.Atoi(kvPair[0])
 			value, _ := strconv.ParseFloat(kvPair[1], 64)
-			newInstance.Features[key] = value
+			newInstance.Features[key] = SVMFeature(value)
 		}
 		file.Instances = append(file.Instances, newInstance)
 	}
 	return &file
 }
 
-func (f *SVMFile) WriteSVMFile(fileName string) {
+func (file *SVMFile) WriteSVMFile(fileName string) {
 	output := bytes.NewBufferString("")
 	fs := ""
 	for _, instance := range file.Instances {
@@ -132,10 +134,10 @@ func (f *SVMFile) WriteSVMFile(fileName string) {
 	sysfile.Write(output.Bytes())
 }
 
-func Learn(trainFile, modelFile string, c float64, j float64, d int) {
+func Learn(trainFile, modelFile string, c float64, j float64, d int) string {
 	t := 0
 	if d != 0 {
-		t := 1
+		t = 1
 	}
 	if c == 0. {
 		c = 1.
@@ -143,10 +145,15 @@ func Learn(trainFile, modelFile string, c float64, j float64, d int) {
 	if j == 0. {
 		j = 1.
 	}
-	out, _ := exec.Command("svm_learn", "-c", fmt.Sprintf("%f", c),
+	// out, _ := exec.Command("svm_learn", "-c", fmt.Sprintf("%f", c), "-v", "1", trainFile, modelFile).Output()
+
+	out, _ := exec.Command("svm_learn",
+		"-c", fmt.Sprintf("%f", c),
 		"-j", fmt.Sprintf("%f", j),
-		"-t", fmt.Sprintf("%f", t),
-		"-d", fmt.Sprintf("%f", d))
+		"-t", fmt.Sprintf("%d", t),
+		"-d", fmt.Sprintf("%d", d),
+		trainFile, modelFile).Output()
+
 	return fmt.Sprintf("%s\n", out)
 }
 
@@ -158,7 +165,7 @@ func Classify(testFileName, modelFileName, resultFileName string) string {
 func ParseModelFile(fileName string) *ModelFile {
 	modelFile := ModelFile{}
 	modelFile.Kernel = KernelInfo{}
-	modelFile.Alphas = []Aplha{}
+	modelFile.Alphas = []Alpha{}
 	fi, err := os.Open(fileName)
 	if err != nil {
 		panic(err)
@@ -170,8 +177,8 @@ func ParseModelFile(fileName string) *ModelFile {
 	}()
 	reader := bufio.NewReader(fi)
 	lineNumber := 0
-	for buffer, err := reader.ReadBytes("\n"); len(buffer) != 0; lineNumber++ {
-		str := strings.TrimRight(strings.Split(string(buffer), "#"), " ")[0]
+	for buffer, _ := reader.ReadBytes('\n'); len(buffer) != 0; lineNumber++ {
+		str := strings.TrimRight(strings.Split(string(buffer), "#")[0], " ")
 		switch lineNumber {
 		case 0:
 			break
@@ -197,7 +204,21 @@ func ParseModelFile(fileName string) *ModelFile {
 			modelFile.Bias, _ = strconv.ParseFloat(str, 64)
 		default:
 			alpha := Alpha{}
-			featureLabelSplit := 
+			lbl_feat_split := strings.Split(str, " ")
+			if len(lbl_feat_split) <= 1 {
+				panic("This file does not follow the conventional SVMlight format")
+			}
+			alpha.Weight, _ = strconv.ParseFloat(lbl_feat_split[0], 64)
+			featureSplit := lbl_feat_split[1:]
+			for _, featurePair := range featureSplit {
+				kvPair := strings.Split(featurePair, ":")
+				if len(kvPair) != 2 {
+					panic("This file does not follow the conventional SVMlight format")
+				}
+				key, _ := strconv.Atoi(kvPair[0])
+				value, _ := strconv.ParseFloat(kvPair[1], 64)
+				alpha.Vector[key] = SVMFeature(value)
+			}
 			modelFile.Alphas = append(modelFile.Alphas, alpha)
 		}
 
@@ -205,10 +226,30 @@ func ParseModelFile(fileName string) *ModelFile {
 	return &modelFile
 }
 
-func ParseResultFile() {
+func ParseResultFile(fileName string) *ClassificationFile {
+	file := ClassificationFile{}
+	file.Results = []ClassificationResult{}
 
+	fi, err := os.Open(fileName)
+	if err != nil {
+		panic(err)
+	}
+	defer func() {
+		if err := fi.Close(); err != nil {
+			panic(err)
+		}
+	}()
+
+	reader := bufio.NewReader(fi)
+
+	for buffer, _ := reader.ReadBytes('\n'); len(buffer) != 0; {
+		val, _ := strconv.ParseFloat(string(buffer), 64)
+		file.Results = append(file.Results, ClassificationResult(val))
+	}
+
+	return &file
 }
 
-func WriteResultFile() {
+func (f *ClassificationFile) WriteResultFile(fileName string) {
 
 }
