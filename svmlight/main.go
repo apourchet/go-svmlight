@@ -17,6 +17,14 @@ func (f *SVMFile) CountLabels(label int) int {
 	return acc
 }
 
+func (instance *SVMInstance) Norm() float64 {
+	cumSum := 0.
+	for _, val := range instance.Features {
+		cumSum += val
+	}
+	return math.Sqrt(cumSum)
+}
+
 func (f *SVMFile) MakeBinary(label int) {
 	for _, instance := range f.Instances {
 		if instance.Label == label {
@@ -28,7 +36,12 @@ func (f *SVMFile) MakeBinary(label int) {
 }
 
 func (f *SVMFile) NormalizeInstances() {
-
+	for _, instance := range f.Instances {
+		norm := instance.Norm()
+		for k, v := range instance.Features {
+			instance.Features[k] = v / norm
+		}
+	}
 }
 
 func Learn(trainFile, modelFile string, c float64, j float64, d int) *ModelFile {
