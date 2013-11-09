@@ -17,7 +17,7 @@ type SVMFile struct {
 }
 type SVMInstance struct {
 	Features map[int]SVMFeature
-	Label    string
+	Label    int
 }
 
 type SVMFeature float64
@@ -44,7 +44,7 @@ type ClassificationFile struct {
 	Results []ClassificationResult
 }
 
-func (f *SVMFile) CountLabels(label string) int {
+func (f *SVMFile) CountLabels(label int) int {
 	acc := 0
 	for _, instance := range f.Instances {
 		if instance.Label == label {
@@ -54,24 +54,24 @@ func (f *SVMFile) CountLabels(label string) int {
 	return acc
 }
 
-func (f *SVMFile) MakeBinary(label string) {
+func (f *SVMFile) MakeBinary(label int) {
 	for _, instance := range f.Instances {
 		if instance.Label == label {
-			instance.Label = "1"
+			instance.Label = 1
 		} else {
-			instance.Label = "-1"
+			instance.Label = -1
 		}
 	}
 }
 
-func (file *SVMFile) WriteBinary(label, fileName string) {
+func (file *SVMFile) WriteBinary(label int, fileName string) {
 	newF := &SVMFile{}
 	for _, instance := range file.Instances {
 		newInstance := instance
 		if newInstance.Label == label {
-			newInstance.Label = "1"
+			newInstance.Label = 1
 		} else {
-			newInstance.Label = "-1"
+			newInstance.Label = 1
 		}
 		newF.Instances = append(newF.Instances, newInstance)
 	}
@@ -99,7 +99,7 @@ func ParseSVMFile(fileName string) *SVMFile {
 		if len(lbl_feat_split) <= 1 {
 			panic("This file does not follow the conventional SVMlight format")
 		}
-		newInstance.Label = lbl_feat_split[0]
+		newInstance.Label, _ = strconv.Atoi(lbl_feat_split[0])
 		newInstance.Features = make(map[int]SVMFeature)
 		featureSplit := lbl_feat_split[1:]
 		for _, featurePair := range featureSplit {
@@ -120,7 +120,7 @@ func (file *SVMFile) WriteSVMFile(fileName string) {
 	output := bytes.NewBufferString("")
 	fs := ""
 	for _, instance := range file.Instances {
-		output.WriteString(instance.Label)
+		output.WriteString(fmt.Sprintf("%d", instance.Label))
 		for k, v := range instance.Features {
 			fs = fmt.Sprintf(" %d:%f", k, v)
 			output.WriteString(fs)
@@ -256,15 +256,13 @@ func (file *ClassificationFile) Accuracy(set *SVMFile) float64 {
 	correctPreds := 0.
 	if len(file.Results) <= len(set.Instances) {
 		for i, res := range file.Results {
-			lbl, _ := strconv.Atoi(set.Instances[i].Label)
-			if math.Signbit(float64(res)) == math.Signbit(float64(lbl)) {
+			if math.Signbit(float64(res)) == math.Signbit(float64(set.Instances[i].Label)) {
 				correctPreds++
 			}
 		}
 	} else {
 		for i, instance := range set.Instances {
-			lbl, _ := strconv.Atoi(instance.Label)
-			if math.Signbit(float64(file.Results[i])) == math.Signbit(float64(lbl)) {
+			if math.Signbit(float64(file.Results[i])) == math.Signbit(float64(instance.Label)) {
 				correctPreds++
 			}
 		}
