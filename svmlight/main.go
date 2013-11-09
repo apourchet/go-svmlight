@@ -92,13 +92,15 @@ func ParseSVMFile(fileName string) *SVMFile {
 	file.FileName = fileName
 	file.Instances = []SVMInstance{}
 
-	for buffer, _ := reader.ReadBytes('\n'); len(buffer) != 0; {
+	for buffer, _, err := reader.ReadLine(); err == nil; buffer, _, err = reader.ReadLine() {
+		fmt.Println(string(buffer))
 		newInstance := SVMInstance{}
 		lbl_feat_split := strings.Split(string(buffer), " ")
 		if len(lbl_feat_split) <= 1 {
 			panic("This file does not follow the conventional SVMlight format")
 		}
 		newInstance.Label = lbl_feat_split[0]
+		newInstance.Features = make(map[int]SVMFeature)
 		featureSplit := lbl_feat_split[1:]
 		for _, featurePair := range featureSplit {
 			kvPair := strings.Split(featurePair, ":")
@@ -177,7 +179,7 @@ func ParseModelFile(fileName string) *ModelFile {
 	}()
 	reader := bufio.NewReader(fi)
 	lineNumber := 0
-	for buffer, _ := reader.ReadBytes('\n'); len(buffer) != 0; lineNumber++ {
+	for buffer, _, err := reader.ReadLine(); err == nil; buffer, _, err = reader.ReadLine() {
 		str := strings.TrimRight(strings.Split(string(buffer), "#")[0], " ")
 		switch lineNumber {
 		case 0:
@@ -242,7 +244,7 @@ func ParseResultFile(fileName string) *ClassificationFile {
 
 	reader := bufio.NewReader(fi)
 
-	for buffer, _ := reader.ReadBytes('\n'); len(buffer) != 0; {
+	for buffer, _, err := reader.ReadLine(); err == nil; buffer, _, err = reader.ReadLine() {
 		val, _ := strconv.ParseFloat(string(buffer), 64)
 		file.Results = append(file.Results, ClassificationResult(val))
 	}
