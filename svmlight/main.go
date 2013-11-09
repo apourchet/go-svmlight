@@ -20,10 +20,25 @@ type SVMInstance struct {
 
 type SVMFeature float64
 
-type ModelFile struct {
+type KernelInfo struct {
+	t, d, g, s, r, u int
 }
 
+type Aplha struct {
+	Weight float64
+	Vector map[int]SVMFeature
+}
+
+type ModelFile struct {
+	Kernel       KernelInfo
+	TrainingSize int
+	Bias         float64
+	Alphas       []Aplha
+}
+type ClassificationResult float64
+
 type ClassificationFile struct {
+	Results []ClassificationResult
 }
 
 func (f *SVMFile) CountLabels(label string) int {
@@ -135,8 +150,59 @@ func Learn(trainFile, modelFile string, c float64, j float64, d int) {
 	return fmt.Sprintf("%s\n", out)
 }
 
-func Classify() {
+func Classify(testFileName, modelFileName, resultFileName string) string {
+	out2, _ := exec.Command("svm_classify", "-v", "3", testFileName, modelFileName, resultFileName).Output()
+	return fmt.Sprintf("%s\n", out2)
+}
 
+func ParseModelFile(fileName string) *ModelFile {
+	modelFile := ModelFile{}
+	modelFile.Kernel = KernelInfo{}
+	modelFile.Alphas = []Aplha{}
+	fi, err := os.Open(fileName)
+	if err != nil {
+		panic(err)
+	}
+	defer func() {
+		if err := fi.Close(); err != nil {
+			panic(err)
+		}
+	}()
+	reader := bufio.NewReader(fi)
+	lineNumber := 0
+	for buffer, err := reader.ReadBytes("\n"); len(buffer) != 0; lineNumber++ {
+		str := strings.TrimRight(strings.Split(string(buffer), "#"), " ")[0]
+		switch lineNumber {
+		case 0:
+			break
+		case 1:
+			modelFile.Kernel.t, _ = strconv.Atoi(str)
+		case 2:
+			modelFile.Kernel.d, _ = strconv.Atoi(str)
+		case 3:
+			modelFile.Kernel.g, _ = strconv.Atoi(str)
+		case 4:
+			modelFile.Kernel.s, _ = strconv.Atoi(str)
+		case 5:
+			modelFile.Kernel.r, _ = strconv.Atoi(str)
+		case 6:
+			modelFile.Kernel.u, _ = strconv.Atoi(str)
+		case 7:
+			break
+		case 8:
+			modelFile.TrainingSize, _ = strconv.Atoi(str)
+		case 9:
+			break
+		case 10:
+			modelFile.Bias, _ = strconv.ParseFloat(str, 64)
+		default:
+			alpha := Alpha{}
+			featureLabelSplit := 
+			modelFile.Alphas = append(modelFile.Alphas, alpha)
+		}
+
+	}
+	return &modelFile
 }
 
 func ParseResultFile() {
