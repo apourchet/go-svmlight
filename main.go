@@ -17,12 +17,12 @@ func (f *SVMFile) CountLabels(label int) int {
 	return acc
 }
 
-func (instance *SVMInstance) Norm() float64 {
+func (instance *SVMInstance) Norm() SVMFeature {
 	cumSum := 0.
 	for _, val := range instance.Features {
-		cumSum += val
+		cumSum += float64(val)
 	}
-	return math.Sqrt(cumSum)
+	return SVMFeature(math.Sqrt(float64(cumSum)))
 }
 
 func (f *SVMFile) MakeBinary(label int) {

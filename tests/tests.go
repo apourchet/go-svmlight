@@ -1,7 +1,7 @@
 package main
 
 import (
-	"./svmlight"
+	"../../go-svmlight"
 	"fmt"
 )
 
